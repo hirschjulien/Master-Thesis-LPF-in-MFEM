@@ -7,7 +7,7 @@ errors = data[:, 1]
 
 # --- Plot ---
 plt.figure(figsize=(6, 4))
-plt.loglog(ndofs, errors, 'o-', label=f'L2 error, p-order=2')
+plt.loglog(ndofs, errors, 'o-', label=f'L2 error, p-order=4')
 plt.xlabel('DOF')
 plt.ylabel('L2 error')
 plt.title('Convergence of Laplace solver')

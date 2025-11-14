@@ -5,10 +5,6 @@
 using namespace std;
 using namespace mfem;
 
-// try with 2D mesh
-// check all steps
-
-
 // Solver for Linear Boundary Conditions:
 // d_eta / dt = w_tilde
 // d_phi_fs / dt = -g * eta
@@ -71,8 +67,8 @@ class rhs_linear : public TimeDependentOperator{
 
 
 int main(){
-    int order = 1;
-    int ref_levels = 0;
+    int order = 4;
+    //int ref_levels = 0;
 
     const char *mesh_file = "../Meshes/wave-tank.mesh";
     Mesh mesh(mesh_file, 1, 1);
@@ -195,7 +191,7 @@ int main(){
     {   
     vol1.precision(8);
     vol1 << "solution\n" << mesh << phi
-         << "window_title 'Initial Conditions imposed as Boundary Conditions on phi'\n"
+         << "window_title 'phi with linear boundary surface conditions'\n"
          << "keys mm\n"
          << flush;
     }

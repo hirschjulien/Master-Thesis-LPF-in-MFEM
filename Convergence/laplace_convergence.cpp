@@ -22,7 +22,7 @@ int main (){
     int order = 2;
     const int max_ref_levels = 4;
 
-    const char *mesh_file = "wave-tank.mesh";
+    const char *mesh_file = "../Meshes/wave-tank.mesh";
 
     Mesh mesh(mesh_file, 1, 1);
     int dim = mesh.Dimension();
@@ -43,7 +43,7 @@ int main (){
     const double zmax = bbmax(2);
 
 
-    const double m = 2;     // number of wave periods in domain
+    const double m = 1;     // number of wave periods in domain
     const double k  = m * 2.0*M_PI / Lx;         
     const double kh = k * h;    // by definition
     const double omega = k * sqrt((g/k) * tanh(kh));

@@ -7,7 +7,7 @@ using namespace mfem;
 
 int main (){
 
-    int order = 1;
+    int order = 4;
     int ref_levels = 0;
 
     const char *mesh_file = "../Meshes/wave-tank.mesh";
