@@ -30,11 +30,12 @@ class rhs_linear : public TimeDependentOperator{
         FiniteElementSpace &fespace_fs;
         FiniteElementSpace &fespace;
         SubMesh &mesh_fs;
-        // mutable GridFunction eta_gf;
+        //mutable GridFunction w_tilde;
+        mutable GridFunction eta_gf;
 
     public:
         rhs_linear(FiniteElementSpace *fes, FiniteElementSpace *fe, const GridFunction &phi, double g, SubMesh &mesh_fs) :
-        TimeDependentOperator(2 * fes->GetTrueVSize()), phi(phi), g(g), fespace_fs(*fes), fespace(*fe), mesh_fs(mesh_fs) {}
+        TimeDependentOperator(2 * fes->GetTrueVSize()), phi(phi), g(g), fespace_fs(*fes), fespace(*fe), mesh_fs(mesh_fs), eta_gf(&fespace_fs) {}
         
         void Mult( const Vector &eta_phifs, Vector &d_eta_phifs_dt) const override
         {                   
@@ -48,6 +49,9 @@ class rhs_linear : public TimeDependentOperator{
 
             const int N = fespace_fs.GetTrueVSize();    // Size of the Surface ElementSpace
             d_eta_phifs_dt.SetSize(2*N);    // Ensure Size
+
+            //analytical w_tilde:
+            // w = -k^3*H*c*cosh(k*(z+h))*sin(k*x-w*t)/(2*sinh(k*h));
 
             // Split input vector into eta and phi_fs
             Vector eta_vec(const_cast<double*>(eta_phifs.GetData()), N);    
@@ -63,12 +67,15 @@ class rhs_linear : public TimeDependentOperator{
             dphi_fs_dt = eta_vec;
             dphi_fs_dt *= -g;
         }
+
+        //GridFunction &GetWTilde() const { return w_tilde; }
+        GridFunction &GetEta() const { return eta_gf; }
 };
 
 
 int main(){
     int order = 4;
-    //int ref_levels = 0;
+    int ref_levels = 0;
 
     const char *mesh_file = "../Meshes/wave-tank.mesh";
     Mesh mesh(mesh_file, 1, 1);
@@ -76,6 +83,11 @@ int main(){
 
     FiniteElementCollection *fec = new H1_FECollection(order, dim);
     FiniteElementSpace fespace(&mesh, fec);
+
+    for (int i=0; i < ref_levels; i++){
+        mesh.UniformRefinement();       // refining the mesh Mesh. Repeats uniform h-refinement ref_levels times
+        fespace.Update();
+    }
 
     // ----- 2. Create SubMesh -------
     Array<int> bdr_attr;
@@ -118,11 +130,15 @@ int main(){
     double h  = bbmax(2) - bbmin(2);   // since top is 0, bottom is -h
     double zmax = bbmax(2);
 
+    // Wave Parameters
     double m = 1;     // number of wave periods in domain
     double k  = m * 2.0*M_PI / Lx;         
     double kh = k * h;    // by definition
-    double omega = k * sqrt((g/k) * tanh(kh));
+    double cwave = sqrt(g / k * tanh(kh));
     //double T = 2.0 * M_PI / omega;
+    double T = Lx / cwave;
+    double omega = 2*M_PI / T;
+    cout << T << endl;
     double cs = sqrt(g/k * tanh(kh));
     
     //cout << (cs - omega/k) << "\n";     // check dispersion relation
@@ -133,17 +149,39 @@ int main(){
     // ------ 4. Start the time loop ------- https://en.ittrip.xyz/c-language/mfem-ode-c-hpc-pdes
     ODESolver *ode_solver = new RK4Solver();
     double t = 0.0;
-    double t_final = 1.0;
-    double dt = 0.001;
+    double t_final = T;
 
     // --- Initialize phi&eta ---
-    FunctionCoefficient eta_init([&](const Vector& x){
-        return H/2.0 * cos(omega*t - k*x(0) + ph);   
+    double theta = 0.0;   // wave direction angle
+    double U = omega / k;
+    double kx_dir = cos(theta);
+    double ky_dir = sin(theta);
+
+    auto phase = [&](const Vector &X)
+    {
+        double x = X(0);
+        double y = X(1);
+        return omega * t - k * (kx_dir * x + ky_dir * y);
+    };
+
+    FunctionCoefficient eta_init([&](const Vector &X)
+    {
+        return 0.5 * H * cos(phase(X));
     });
 
-    FunctionCoefficient phi_fs_init([&](const Vector& x){
-        return 0.5*H*cs * cosh(kh)/sinh(kh) * sin(omega*t - k*x(0) + ph);
+    FunctionCoefficient phi_fs_init([&](const Vector &X)
+    {
+        return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
     });
+
+
+    // FunctionCoefficient eta_init([&](const Vector& x){
+    //     return H/2.0 * cos(omega*t - k*x(0) + ph);   
+    // });
+
+    // FunctionCoefficient phi_fs_init([&](const Vector& x){
+    //     return -0.5*H*cs * cosh(kh)/sinh(kh) * sin(omega*t - k*x(0) + ph);
+    // });
 
     eta.ProjectCoefficient(eta_init);
     phi_fs.ProjectCoefficient(phi_fs_init);
@@ -159,8 +197,6 @@ int main(){
         Array<int> essential_bdr(mesh.bdr_attributes.Max());
         essential_bdr = 0;
         essential_bdr[2-1] = 1;
-        //phi.ProjectBdrCoefficient(phi_fs_bc, essential_bdr);  // I already have boundary conditions on top from transferring the submesh over on the parentmesh!!!
-                                                                // Projecting again messes up the solution in y-direction
 
         BilinearForm a(&fespace);
         a.AddDomainIntegrator(new DiffusionIntegrator);
@@ -182,10 +218,17 @@ int main(){
     // socketstream vol1("localhost", 19916);
     // vol1 << "solution\n" << mesh << phi << "window_title 'Initial Conditions imposed as Boundary Conditions on phi'\nkeys mm" << flush;
 
+    socketstream init("localhost", 19916);
+    init.precision(8);
+    init << "solution\n" << mesh << phi
+         << "window_title 'init'\n"
+         << "keys mm\n"
+         << flush;
+
     socketstream vol1("localhost", 19916);
     if (!vol1)
     {
-        cerr << "Unable to connect to GLVis server on port 19916.\n";
+        cerr << "Forgot to start GLVis\n";
     }
     else
     {   
@@ -196,31 +239,40 @@ int main(){
          << flush;
     }
 
+    // socketstream eta_plot("localhost", 19916);
+    // eta_plot.precision(8);
+    // eta_plot << "solution\n" << mesh_fs << eta
+    //      << "window_title 'eta'\n"
+    //      << "keys mm\n"
+    //      << flush;
+    
+
     // socketstream top("localhost", 19916);
     // top << "solution\n" << mesh_fs << phi_fs << "window_title 'Initial Condition for phi_fs on surface subMesh'\nkeys cm" << flush;
+
+    //GridFunction w_tilde(fespace);
 
     // ----- Steps 4-7 ------
     rhs_linear surface(&fespace_fs, &fespace, phi, g, mesh_fs);    // Create linear Free Surface System
     ode_solver->Init(surface);  // Initialize time integration
    
-    bool last_step = false;
-    for(int ti = 1; !last_step; ti++){
-        real_t dt_real = min(dt, t_final-t);
+    // bool last_step = false;
+    int nsteps = 500;
+    double dt = t_final / nsteps;
+    for(int step = 0; step < nsteps+1; step++){
 
         ode_solver->Step(eta_phi_fs, t, dt);
 
-        last_step = (t >= t_final - 1e-8*dt);
+        //analytical w_tilde:
+        // FunctionCoefficient w_exact([&](const Vector &x){
+        //     return -k*k*k * H * cwave * cosh(k*h) *
+        //    sin(k*x(0) - omega*t) / (2.0 * sinh(k*h));
+        // });
 
         // phi_fs is defined on the surface mesh. Transfer phi_fs to parent mesh
         mesh_fs.Transfer(phi_fs, phi);
-        // GridFunctionCoefficient phi_fs_bc(&phi);    // Make a Coefficient out of the data on phi_fs, so I can project it as boundary condition
 
-        Array<int> essential_bdr(mesh.bdr_attributes.Max());
-        essential_bdr = 0;
-        essential_bdr[2-1] = 1;
-        //phi.ProjectBdrCoefficient(phi_fs_bc, essential_bdr);  // I already have boundary conditions on top from transferring the submesh over on the parentmesh!!!
-                                                                // Projecting again messes up the solution in y-direction
-
+        // Can this be reused? The solver runs with building it each step
         BilinearForm a(&fespace);
         a.AddDomainIntegrator(new DiffusionIntegrator);
         a.Assemble();
@@ -228,22 +280,27 @@ int main(){
         LinearForm b(&fespace);
         b.Assemble();
 
-        SparseMatrix A;
-        Vector X, B;
-        Array<int> ess_tdof;
-        fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
-        a.FormLinearSystem(ess_tdof, phi, b, A, X, B);
+        //SparseMatrix A;
+        Vector X_step, B_step;
+        // Array<int> ess_tdof;
+        // fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
+        a.FormLinearSystem(ess_tdof, phi, b, A, X_step, B_step);
 
-        GSSmoother M(A);
-        PCG(A, M, B, X, 0, 400, 1e-12, 0.0);
-        a.RecoverFEMSolution(X, b, phi);
+        
+        // GSSmoother M(A);
+        PCG(A, M, B_step, X_step, 0, 400, 1e-12, 0.0);
+        a.RecoverFEMSolution(X_step, b, phi);
 
         vol1 << "solution\n" << mesh << phi << flush;
     }
     
-    // Visualize
-    // socketstream vol("localhost", 19916);
-    // vol << "solution\n" << mesh << phi << "window_title 'phi after time stepping'\nkeys mm" << flush;
+    socketstream final("localhost", 19916);
+    final.precision(8);
+    final << "solution\n" << mesh << phi
+         << "window_title 'final'\n"
+         << "keys mm\n"
+         << flush;
+
 
     delete fec;
     delete fec_fs;
