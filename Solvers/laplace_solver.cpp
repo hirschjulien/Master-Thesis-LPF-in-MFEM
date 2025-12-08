@@ -87,7 +87,7 @@ int main (){
     });
 
     FunctionCoefficient phi_fs_init([&](const Vector& x){
-        return 0.5*H*cs * cosh(kh)/sinh(kh) * sin(omega*t -k*x(0) + ph);
+        return -0.5*H*cs * cosh(kh)/sinh(kh) * sin(omega*t -k*x(0) + ph);
     });
     
     GridFunction phi_fs(&fespace_fs);
@@ -120,9 +120,23 @@ int main (){
 
     // Transfer trace of phi onto the free-surface submesh
     // GridFunction phi_fs(&fespace_fs);
-    // SubMesh::CreateTransferMap(phi, phi_fs).Transfer(phi, phi_fs);
+    //SubMesh::CreateTransferMap(phi, phi_fs).Transfer(phi, phi_fs);
 
-  
+    // analytical w_tilde:
+    // FunctionCoefficient w_exact([&](const Vector &x){
+    //     return -k*k*k * H * cwave * cosh(k*h) *
+    //     sin(k*x(0) - omega*t) / (2.0 * sinh(k*h));
+    //     });
+
+    // GridFunction w(&fespace);
+    // w.GetDerivative(1, 2, phi);
+
+    // GridFunction w_tilde(&fespace_fs);
+    // mesh_fs.Transfer(w, w_tilde);
+
+    // double l2err; 
+    // w.ComputeL2Error(w_exact)
+
     socketstream vol("localhost", 19916);
     vol << "solution\n" << mesh << phi << "window_title 'Initial phi without time stepping'\nkeys mm" << flush;
     // socketstream surf("localhost", 19916);

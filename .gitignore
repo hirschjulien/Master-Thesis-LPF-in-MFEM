@@ -2,6 +2,7 @@
 *.out
 *.exe
 *.txt
+.DS_Store
 
 PF_linear
 laplace_solver
