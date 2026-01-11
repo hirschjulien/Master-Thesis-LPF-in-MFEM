@@ -172,21 +172,7 @@ int main (int argc, char *argv[])
 
 
     double l2 = phi.ComputeL2Error(phi_exact);
-    cout << "L2 Error: " << l2 << endl;
-
-    //     // ------ GET w AND COMPARE TO ANLYTICAL SOLUTION -------
-    // GridFunction w(&fespace);   // w on parent mesh
-    // phi.GetDerivative(1, 2, w); // Derivative in z direction for whole parent mesh
-    // GridFunction w_tilde(&fespace_fs); // w_tilde on Submesh
-    // mesh_fs.Transfer(w, w_tilde);   // Transfer the vertical derivative 
-
-    // FunctionCoefficient w_analytical([&](const Vector& X){
-    //     double z_rel    = X(2) - zmax;
-    //     return -H * U * 0.5 * k * (sinh(k*(z_rel+h)) / sinh(k*h)) * sin(omega*t - k*(kx_dir * X(0) + ky_dir * X(1)));
-    // });
-
-    // double l2_w = w.ComputeL2Error(w_analytical);
-    // cout << l2_w << endl;
+    cout << "L2 Phi Error: " << l2 << endl;
 
     delete fec_fs;
     delete fec;
