@@ -380,28 +380,6 @@ int main()
     // Impose initial phi_fs on top boundary
     mesh_fs.Transfer(phi_fs, phi);
 
-    // // ----- Laplace solve setup (kept as in your code style) -----
-    // Array<int> essential_bdr(mesh.bdr_attributes.Max());
-    // essential_bdr = 0;
-    // essential_bdr[2-1] = 1;
-
-    // BilinearForm a(&fespace);
-    // a.AddDomainIntegrator(new DiffusionIntegrator);
-    // a.Assemble();
-
-    // LinearForm b(&fespace);
-    // b.Assemble();
-
-    // SparseMatrix A;
-    // Vector X, B;
-    // Array<int> ess_tdof;
-    // fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
-    // a.FormLinearSystem(ess_tdof, phi, b, A, X, B);
-
-    // GSSmoother M(A);
-    // PCG(A, M, B, X, 0, 400, 1e-24, 0.0);
-    // a.RecoverFEMSolution(X, b, phi);
-
     // Essential TDofs (top boundary attr=2)
     Array<int> essential_bdr(mesh.bdr_attributes.Max());
     essential_bdr = 0;
