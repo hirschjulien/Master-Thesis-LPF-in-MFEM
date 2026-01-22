@@ -30,6 +30,8 @@ static inline double DispersionRelationWaves(double g, double T, double h, int n
     return kh;
 }
 
+
+// ================= SETTIGN UP RHS FOR TIME INTEGRATION ==========
 class rhs_linear : public TimeDependentOperator
 {
 private:
