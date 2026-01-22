@@ -7,7 +7,8 @@
 using namespace std;
 using namespace mfem;
 
-// ==================== DISPERSION SOLVER (TRANSLATED FROM MATLAB) ====================
+// ==================== DISPERSION SOLVER ====================
+// only needed when I choose wave parameters from T
 static inline double coth_safe(double x)
 {
     const double eps = 1e-12;
@@ -158,8 +159,10 @@ public:
         dphfs_true_dt = eta_true;
         dphfs_true_dt *= -g;
 
+        // ========= RELAXATION ZONES =========
         const double t_stage = this->GetTime();
 
+        // exact solutions to define relaxation function
         auto phase = [&](const Vector &Xfs) -> double
         {
             return omega * t_stage - k * (kx_dir * Xfs(0) + ky_dir * Xfs(1));
@@ -178,6 +181,7 @@ public:
         eta_e.ProjectCoefficient(eta_exact);
         phi_fs_e.ProjectCoefficient(phi_fs_exact);
 
+        // ======== Get gridfunction from true dof. True dof are possibly missing nodes =======
         deta_v.SetFromTrueDofs(deta_true_dt);
         dphi_v.SetFromTrueDofs(dphfs_true_dt);
 
@@ -197,6 +201,7 @@ public:
 
         const int Nv = fespace_fs.GetVSize();
 
+        // ======== Ramping for wave generation ========
         const double n_ramp = 3.0;
         const double Tramp  = n_ramp * T;
 
@@ -217,6 +222,7 @@ public:
             dphi[i] += (cabs * inv_tau) * (0.0 - phi_vdat[i]);
         }
 
+        // ======== back to true dof ========
         deta_v.GetTrueDofs(deta_true_dt);
         dphi_v.GetTrueDofs(dphfs_true_dt);
     }
@@ -229,11 +235,97 @@ int main(int argc, char *argv[])
     int num_procs = Mpi::WorldSize();
     int myid = Mpi::WorldRank();
 
+    // ========= TIME PARAMETERS =========
+    double t = 0.0; // start time --> final time is defined in wave parameters line 262
+
+    int nsteps = 800;
+    double dt = t_final / nsteps;
+
+    // ========== WAVE PARAMETERS =========
+    double H = 0.05;
+    double g = 9.81;
+
+    Vector bbmin, bbmax;
+    mesh.GetBoundingBox(bbmin, bbmax);
+
+    double h  = bbmax(2) - bbmin(2);
+
+    const double Lx = bbmax(0) - bbmin(0);
+
+    // ================= Choose the wave by PERIOD T =================  
+    const double lambda = Lx;
+
+    const double kh = 1.0;
+
+    const double k     = 2.0 * M_PI / lambda;
+    const double cwave = sqrt((g / k) * tanh(kh));
+    const double T_input = lambda / cwave;
+    double t_final = 8.0 * T_input; // final time
+    const double omega = 2.0 * M_PI / T_input;
+
+    if (myid == 0)
+    {
+        cout << "Wave parameters:\n";
+        cout << "  Lx     = " << Lx << "\n";
+        cout << "  lwave  = " << lambda << "\n";
+        cout << "  kh     = " << kh << "\n";
+        cout << "  k      = " << k << "\n";
+        cout << "  cwave  = " << cwave << "\n";
+        cout << "  T      = " << T_input << "\n";
+        cout << "  omega  = " << omega << "\n";
+        cout << "  H      = " << H << "\n";
+    }
+
+    // ================= Choose the wave by PERIOD T =================
+    // const double T_input = 1.13392/3;   //  seconds (1.13392 is one period on wave-tank-finite.mesh)
+    // const int    n_iter  = 40;
+
+    // const double omega = 2.0 * M_PI / T_input;
+    // const double kh    = DispersionRelationWaves(g, T_input, h, n_iter);
+    // const double k     = kh / h;
+    // const double cwave = omega / k;
+    // const double lambda = 2.0 * M_PI / k;
+
+    // if (myid == 0)
+    // {
+    //     cout << "Wave parameters:\n";
+    //     cout << "  T     = " << T_input << "\n";
+    //     cout << "  omega = " << omega << "\n";
+    //     cout << "  h     = " << h << "\n";
+    //     cout << "  kh    = " << kh << "\n";
+    //     cout << "  k     = " << k << "\n";
+    //     cout << "  lambda= " << lambda << "\n";
+    //     cout << "  cwave = " << cwave << "\n";
+    // }
+
+
+    // ========== INITIAL CONDITIONS ========
+    double theta = 0.0;
+    double kx_dir = cos(theta);
+    double ky_dir = sin(theta);
+
+    auto phase = [&](const Vector &X)
+    {
+        return omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
+    };
+
+    FunctionCoefficient eta_init([&](const Vector &X)
+    {
+        return 0.5 * H * cos(phase(X));
+    });
+
+    FunctionCoefficient phi_fs_init([&](const Vector &X)
+    {
+        return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
+    });
+
+
+    // ========== MESH etc. ============
     int order = 4;
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh";
+    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; 
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -268,86 +360,6 @@ int main(int argc, char *argv[])
     ParGridFunction eta(&fespace_fs);
     ParGridFunction phi_fs(&fespace_fs);
 
-    double H = 0.05;
-    double g = 9.81;
-
-    Vector bbmin, bbmax;
-    mesh.GetBoundingBox(bbmin, bbmax);
-
-    double h  = bbmax(2) - bbmin(2);
-
-    // Wave parameters have to be changed so I can derive them from wavelength
-    const double T_input = 1.13392/3;
-    const int    n_iter  = 40;
-
-    const double omega = 2.0 * M_PI / T_input;
-    const double kh    = DispersionRelationWaves(g, T_input, h, n_iter);
-    const double k     = kh / h;
-    const double cwave = omega / k;
-    const double lambda = 2.0 * M_PI / k;
-
-    const double Lx = bbmax(0) - bbmin(0);
-
-    // const double lambda = Lx;
-
-    // const double kh = 1.0;
-
-    // const double k     = 2.0 * M_PI / lambda;
-    // const double cwave = sqrt((g / k) * tanh(kh));
-    // const double T_input = lambda / cwave;
-    // const double omega = 2.0 * M_PI / T_input;
-
-    // if (myid == 0)
-    // {
-    //     cout << "Wave parameters:\n";
-    //     cout << "  Lx     = " << Lx << "\n";
-    //     cout << "  lwave  = " << lambda << "\n";
-    //     cout << "  kh     = " << kh << "\n";
-    //     cout << "  k      = " << k << "\n";
-    //     cout << "  cwave  = " << cwave << "\n";
-    //     cout << "  T      = " << T_input << "\n";
-    //     cout << "  omega  = " << omega << "\n";
-    //     cout << "  H      = " << H << "\n";
-    // }
-
-
-    if (myid == 0)
-    {
-        cout << "Wave parameters:\n";
-        cout << "  T     = " << T_input << "\n";
-        cout << "  omega = " << omega << "\n";
-        cout << "  h     = " << h << "\n";
-        cout << "  kh    = " << kh << "\n";
-        cout << "  k     = " << k << "\n";
-        cout << "  lambda= " << lambda << "\n";
-        cout << "  cwave = " << cwave << "\n";
-    }
-
-    ODESolver *ode_solver = new RK4Solver();
-    double t = 0.0;
-    double t_final = 8.0 * T_input;
-
-    int nsteps = 800;
-    double dt = t_final / nsteps;
-
-    double theta = 0.0;
-    double kx_dir = cos(theta);
-    double ky_dir = sin(theta);
-
-    auto phase = [&](const Vector &X)
-    {
-        return omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
-    };
-
-    FunctionCoefficient eta_init([&](const Vector &X)
-    {
-        return 0.5 * H * cos(phase(X));
-    });
-
-    FunctionCoefficient phi_fs_init([&](const Vector &X)
-    {
-        return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
-    });
 
     eta.ProjectCoefficient(eta_init);
     phi_fs.ProjectCoefficient(phi_fs_init);
@@ -403,8 +415,30 @@ int main(int argc, char *argv[])
     ParGridFunction Cabs_gf(&fespace_fs);
     Cabs_gf.ProjectCoefficient(Cabs_coef);
 
-    double tau = dt;
 
+
+     // ========  START PLOTTING ==========
+    // ==================== ParaView output (volume + surface + relaxation functions) ====================
+    ParaViewDataCollection pv_vol("potential_flow_vol", &mesh);
+    pv_vol.SetPrefixPath("ParaView");
+    pv_vol.SetLevelsOfDetail(order);
+    pv_vol.SetDataFormat(VTKFormat::BINARY);
+    pv_vol.SetHighOrderOutput(true);
+    pv_vol.RegisterField("phi", &phi);
+
+    ParaViewDataCollection pv_fs("potential_flow_fs", &mesh_fs);
+    pv_fs.SetPrefixPath("ParaView");
+    pv_fs.SetLevelsOfDetail(order);
+    pv_fs.SetDataFormat(VTKFormat::BINARY);
+    pv_fs.SetHighOrderOutput(true);
+    pv_fs.RegisterField("eta", &eta);
+    pv_fs.RegisterField("Cgen", &Cgen_gf);
+    pv_fs.RegisterField("Cabs", &Cabs_gf);
+
+    // ============== TIME INTEGRATION =============
+    double tau = dt; // for relaxation
+
+    ODESolver *ode_solver = new RK4Solver();
     rhs_linear surface(&fespace_fs, &fespace,
                        phi, g,
                        ess_tdof,
@@ -423,22 +457,6 @@ int main(int argc, char *argv[])
         cout << "Starting time integration with " << nsteps << " steps" << endl;
     }
 
-    // ==================== ParaView output (TWO collections: volume + surface) ====================
-    ParaViewDataCollection pv_vol("potential_flow_vol", &mesh);
-    pv_vol.SetPrefixPath("ParaView");
-    pv_vol.SetLevelsOfDetail(order);
-    pv_vol.SetDataFormat(VTKFormat::BINARY);
-    pv_vol.SetHighOrderOutput(true);
-    pv_vol.RegisterField("phi", &phi);
-
-    ParaViewDataCollection pv_fs("potential_flow_fs", &mesh_fs);
-    pv_fs.SetPrefixPath("ParaView");
-    pv_fs.SetLevelsOfDetail(order);
-    pv_fs.SetDataFormat(VTKFormat::BINARY);
-    pv_fs.SetHighOrderOutput(true);
-    pv_fs.RegisterField("eta", &eta);
-    pv_fs.RegisterField("Cgen", &Cgen_gf);
-    pv_fs.RegisterField("Cabs", &Cabs_gf);
 
     for (int step = 0; step < nsteps + 1; step++)
     {

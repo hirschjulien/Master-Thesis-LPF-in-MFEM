@@ -104,6 +104,57 @@ public:
 
 int main()
 {
+    // ========== TIME PARAMETERS ===========
+    double t = 0.0;    // start time
+    double t_final = T; // final time
+    int nsteps = 500;
+    double dt = t_final / nsteps;
+
+
+    // ========== Wave Parameters ===========
+    double H = 0.05;
+    double g = 9.81;
+
+    Vector bbmin, bbmax;
+    mesh.GetBoundingBox(bbmin, bbmax);
+
+    double Lx = bbmax(0) - bbmin(0);
+    double Ly = bbmax(1) - bbmin(1);
+    double h  = bbmax(2) - bbmin(2);
+
+    double m = 2.0;
+    double k  = m * 2.0 * M_PI / Lx;
+    double kh = k * h;
+
+    double omega = sqrt(g * k * tanh(kh));
+    double T     = 2.0 * M_PI / omega;
+    double cwave = omega / k;
+
+    cout << "T = " << T << endl;
+    
+
+    // --==========--- Initial conditions ==========
+    double theta = 0.0;
+    double kx_dir = cos(theta);
+    double ky_dir = sin(theta);
+
+    auto phase = [&](const Vector &X)
+    {
+        return omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
+    };
+
+    FunctionCoefficient eta_init([&](const Vector &X)
+    {
+        return 0.5 * H * cos(phase(X));
+    });
+
+    FunctionCoefficient phi_fs_init([&](const Vector &X)
+    {
+        return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
+    });
+
+
+    // ========== MESH etc. ===========
     int order = 2;
     int ref_levels = 1;
 
@@ -144,54 +195,6 @@ int main()
     GridFunction phi_fs(&fespace_fs);
 
 
-    // ============ PARAMETERS ==============
-
-    // ---------- Wave Parameters -----------
-    double H = 0.05;
-    double g = 9.81;
-
-    Vector bbmin, bbmax;
-    mesh.GetBoundingBox(bbmin, bbmax);
-
-    double Lx = bbmax(0) - bbmin(0);
-    double Ly = bbmax(1) - bbmin(1);
-    double h  = bbmax(2) - bbmin(2);
-
-    double m = 2.0;
-    double k  = m * 2.0 * M_PI / Lx;
-    double kh = k * h;
-
-    double omega = sqrt(g * k * tanh(kh));
-    double T     = 2.0 * M_PI / omega;
-    double cwave = omega / k;
-
-    cout << "T = " << T << endl;
-
-    // ----- Time -----
-    ODESolver *ode_solver = new RK4Solver();
-    double t = 0.0;
-    double t_final = T;
-
-    // ----- Initial conditions -----
-    double theta = 0.0;
-    double kx_dir = cos(theta);
-    double ky_dir = sin(theta);
-
-    auto phase = [&](const Vector &X)
-    {
-        return omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
-    };
-
-    FunctionCoefficient eta_init([&](const Vector &X)
-    {
-        return 0.5 * H * cos(phase(X));
-    });
-
-    FunctionCoefficient phi_fs_init([&](const Vector &X)
-    {
-        return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
-    });
-
     eta.ProjectCoefficient(eta_init);
     phi_fs.ProjectCoefficient(phi_fs_init);
 
@@ -214,6 +217,7 @@ int main()
     Array<int> ess_tdof;
     fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
+    
     // ========  START PLOTTING ==========
     // ----- GLVis (volume phi) -----
     socketstream vol1("localhost", 19916);
@@ -235,6 +239,7 @@ int main()
 
     
     // ============ TIME INTEGRATION ===========
+    ODESolver *ode_solver = new RK4Solver();
 
     // ----- Free-surface ODE RHS (no reused matrices) -----
     rhs_linear surface(&fespace_fs, &fespace,
@@ -244,8 +249,6 @@ int main()
 
     ode_solver->Init(surface);
 
-    int nsteps = 500;
-    double dt = t_final / nsteps;
 
     for (int step = 0; step < nsteps + 1; step++)
     {
