@@ -237,8 +237,38 @@ int main(int argc, char *argv[])
     int num_procs = Mpi::WorldSize();
     int myid = Mpi::WorldRank();
 
+        // ========== MESH etc. ============
+    int order = 4;
+    int ref_levels = 0;
+    int par_ref_levels = 0;
+
+    const char *mesh_file = "../Meshes/mesh_cylinder.msh"; // choose "wave-tank-finite.mesh" for basic case and increase order
+
+    Mesh mesh_serial(mesh_file, 1, 1);
+    int dim = mesh_serial.Dimension();
+
+    for (int i = 0; i < ref_levels; i++) { mesh_serial.UniformRefinement(); }
+
+    ParMesh mesh(MPI_COMM_WORLD, mesh_serial);
+    mesh_serial.Clear();
+
+    for (int i = 0; i < par_ref_levels; i++) { mesh.UniformRefinement(); }
+
+    mesh.EnsureNodes();
+
+    FiniteElementCollection *fec = new H1_FECollection(order, dim);
+    ParFiniteElementSpace fespace(&mesh, fec);
+
+    Array<int> bdr_attr;
+    bdr_attr.Append(2);
+    ParSubMesh mesh_fs = ParSubMesh::CreateFromBoundary(mesh, bdr_attr);
+    int dim_fs = mesh_fs.Dimension();
+
+    FiniteElementCollection *fec_fs = new H1_FECollection(order, dim_fs);
+    ParFiniteElementSpace fespace_fs(&mesh_fs, fec_fs);
+
     // ========== WAVE PARAMETERS =========
-    double H = 0.05;
+    double H = 0.005;
     double g = 9.81;
 
     Vector bbmin, bbmax;
@@ -248,15 +278,15 @@ int main(int argc, char *argv[])
 
     const double Lx = bbmax(0) - bbmin(0);
 
-    // ================= Choose the wave by PERIOD T =================  
-    const double lambda = Lx;
-
-    const double kh = 1.0;
+    // ================= Choose the wave by wave length lambda =================  
+    const double lambda = 0.22;
 
     const double k     = 2.0 * M_PI / lambda;
+
+    const double kh = k * h;
     const double cwave = sqrt((g / k) * tanh(kh));
     const double T_input = lambda / cwave;
-    double t_final = 8.0 * T_input; // final time
+    double t_final = 2 * T_input; // final time
     const double omega = 2.0 * M_PI / T_input;
 
     if (myid == 0)
@@ -272,8 +302,9 @@ int main(int argc, char *argv[])
         cout << "  H      = " << H << "\n";
     }
 
-    // ================= Choose the wave by PERIOD T =================
+    // // ================= Choose the wave by PERIOD T =================
     // const double T_input = 1.13392/3;   //  seconds (1.13392 is one period on wave-tank-finite.mesh)
+    // double t_final = 2 * T_input; // final time
     // const int    n_iter  = 40;
 
     // const double omega = 2.0 * M_PI / T_input;
@@ -298,7 +329,7 @@ int main(int argc, char *argv[])
     // ========= TIME PARAMETERS =========
     double t = 0.0; // start time --> final time is defined in wave parameters line 262
 
-    int nsteps = 800;
+    int nsteps = 100;
     double dt = t_final / nsteps;
 
 
@@ -322,36 +353,6 @@ int main(int argc, char *argv[])
         return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
     });
 
-
-    // ========== MESH etc. ============
-    int order = 4;
-    int ref_levels = 0;
-    int par_ref_levels = 0;
-
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; // choose "mesh_cylinder.msh" for cylinder case
-
-    Mesh mesh_serial(mesh_file, 1, 1);
-    int dim = mesh_serial.Dimension();
-
-    for (int i = 0; i < ref_levels; i++) { mesh_serial.UniformRefinement(); }
-
-    ParMesh mesh(MPI_COMM_WORLD, mesh_serial);
-    mesh_serial.Clear();
-
-    for (int i = 0; i < par_ref_levels; i++) { mesh.UniformRefinement(); }
-
-    mesh.EnsureNodes();
-
-    FiniteElementCollection *fec = new H1_FECollection(order, dim);
-    ParFiniteElementSpace fespace(&mesh, fec);
-
-    Array<int> bdr_attr;
-    bdr_attr.Append(2);
-    ParSubMesh mesh_fs = ParSubMesh::CreateFromBoundary(mesh, bdr_attr);
-    int dim_fs = mesh_fs.Dimension();
-
-    FiniteElementCollection *fec_fs = new H1_FECollection(order, dim_fs);
-    ParFiniteElementSpace fespace_fs(&mesh_fs, fec_fs);
 
     int fe_true = fespace_fs.GetTrueVSize();
     Array<int> fe_offset(3);

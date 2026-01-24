@@ -4,6 +4,7 @@
 *.txt
 .DS_Store
 
+/Paraview
 PF_linear
 laplace_solver
 laplace_solver_p
