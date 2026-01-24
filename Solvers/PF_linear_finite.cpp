@@ -269,7 +269,7 @@ int main()
     int order = 5;
     int ref_levels = 1;
 
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh";
+    const char *mesh_file = "../Meshes/wave-tank-finite.mesh";  // choose "cylinder_mesh" for cylinder case
     Mesh mesh(mesh_file, 1, 1);
     int dim = mesh.Dimension();
 

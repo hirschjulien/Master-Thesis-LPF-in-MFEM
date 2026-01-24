@@ -237,12 +237,6 @@ int main(int argc, char *argv[])
     int num_procs = Mpi::WorldSize();
     int myid = Mpi::WorldRank();
 
-    // ========= TIME PARAMETERS =========
-    double t = 0.0; // start time --> final time is defined in wave parameters line 262
-
-    int nsteps = 800;
-    double dt = t_final / nsteps;
-
     // ========== WAVE PARAMETERS =========
     double H = 0.05;
     double g = 9.81;
@@ -301,6 +295,13 @@ int main(int argc, char *argv[])
     // }
 
 
+    // ========= TIME PARAMETERS =========
+    double t = 0.0; // start time --> final time is defined in wave parameters line 262
+
+    int nsteps = 800;
+    double dt = t_final / nsteps;
+
+
     // ========== INITIAL CONDITIONS ========
     double theta = 0.0;
     double kx_dir = cos(theta);
@@ -327,7 +328,7 @@ int main(int argc, char *argv[])
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; 
+    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; // choose "mesh_cylinder.msh" for cylinder case
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
