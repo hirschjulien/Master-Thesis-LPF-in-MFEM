@@ -107,11 +107,11 @@ public:
           deta_v(&fespace_fs),
           dphi_v(&fespace_fs)
     {
-        prec = new HypreBoomerAMG;
-        prec->SetPrintLevel(0);
+        // prec = new HypreBoomerAMG;
+        // prec->SetPrintLevel(0);
     }
 
-    ~rhs_linear() { delete prec; }
+    //~rhs_linear() { delete prec; }
 
     void Mult(const Vector &eta_phifs_true,
               Vector &d_eta_phifs_true_dt) const override
@@ -132,6 +132,7 @@ public:
 
         ParBilinearForm a_loc(&fespace);
         a_loc.AddDomainIntegrator(new DiffusionIntegrator);
+        a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);      // partial assembly
         a_loc.Assemble();
 
         ParLinearForm b_loc(&fespace);
@@ -142,13 +143,16 @@ public:
 
         a_loc.FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
 
+        OperatorJacobiSmoother jacobi;  // jacobi preconditioner
+        jacobi.SetOperator(*A_loc);
+
         CGSolver cg(MPI_COMM_WORLD);
-        cg.SetPreconditioner(*prec);
+        cg.SetPreconditioner(jacobi);
         cg.SetOperator(*A_loc);
         cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
         cg.SetPrintLevel(0);
-        cg.SetMaxIter(400);
+        cg.SetMaxIter(1000);
         cg.Mult(B_loc, X_loc);
 
         a_loc.RecoverFEMSolution(X_loc, b_loc, phi);
@@ -329,7 +333,7 @@ int main(int argc, char *argv[])
     // ========= TIME PARAMETERS =========
     double t = 0.0; // start time --> final time is defined in wave parameters line 262
 
-    int nsteps = 100;
+    int nsteps = 60;
     double dt = t_final / nsteps;
 
 

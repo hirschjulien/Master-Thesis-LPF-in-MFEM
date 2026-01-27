@@ -104,11 +104,38 @@ public:
 
 int main()
 {
-    // ========== TIME PARAMETERS ===========
-    double t = 0.0;    // start time
-    double t_final = T; // final time
-    int nsteps = 500;
-    double dt = t_final / nsteps;
+
+    // ========== MESH etc. ===========
+    int order = 2;
+    int ref_levels = 0;
+
+    const char *mesh_file = "../Meshes/wave-tank.mesh";
+    Mesh mesh(mesh_file, 1, 1);
+    int dim = mesh.Dimension();
+
+    FiniteElementCollection *fec = new H1_FECollection(order, dim);
+    FiniteElementSpace fespace(&mesh, fec);
+
+    for (int i = 0; i < ref_levels; i++)
+    {
+        mesh.UniformRefinement();
+        fespace.Update();
+    }
+    
+    mesh.EnsureNodes();
+
+    // Shift mesh so that top (free surface) is at z = 0
+    // Vector bbmin, bbmax;
+    // mesh.GetBoundingBox(bbmin, bbmax);
+    // const double z_shift = bbmax(2);
+
+    // VectorFunctionCoefficient deform(3, [&](const Vector &x, Vector &y)
+    // {
+    // y = x;
+    // y(2) = x(2) - z_shift;
+    // });
+
+    // mesh.Transform(deform);
 
 
     // ========== Wave Parameters ===========
@@ -140,7 +167,7 @@ int main()
 
     auto phase = [&](const Vector &X)
     {
-        return omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
+        return omega * 0 - k * (kx_dir * X(0) + ky_dir * X(1)); //t=0
     };
 
     FunctionCoefficient eta_init([&](const Vector &X)
@@ -154,24 +181,12 @@ int main()
     });
 
 
-    // ========== MESH etc. ===========
-    int order = 2;
-    int ref_levels = 1;
+    // ========== TIME PARAMETERS ===========
+    double t = 0.0;    // start time
+    double t_final = T; // final time
+    int nsteps = 500;
+    double dt = t_final / nsteps;
 
-    const char *mesh_file = "../Meshes/wave-tank.mesh";
-    Mesh mesh(mesh_file, 1, 1);
-    int dim = mesh.Dimension();
-
-    FiniteElementCollection *fec = new H1_FECollection(order, dim);
-    FiniteElementSpace fespace(&mesh, fec);
-
-    for (int i = 0; i < ref_levels; i++)
-    {
-        mesh.UniformRefinement();
-        fespace.Update();
-    }
-
-    mesh.EnsureNodes();
 
     // ----- Free surface submesh (boundary attribute 2) -----
     Array<int> bdr_attr;
@@ -217,7 +232,7 @@ int main()
     Array<int> ess_tdof;
     fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
-    
+
     // ========  START PLOTTING ==========
     // ----- GLVis (volume phi) -----
     socketstream vol1("localhost", 19916);

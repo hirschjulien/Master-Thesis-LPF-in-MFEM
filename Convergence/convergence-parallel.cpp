@@ -45,8 +45,8 @@ public:
           w(&fespace),
           w_tilde(&fespace_fs)
     {
-        prec = new HypreBoomerAMG;
-        prec->SetPrintLevel(0);
+        // prec = new HypreBoomerAMG;
+        // prec->SetPrintLevel(0);
     }
 
     void Mult(const Vector &eta_phifs_true,
@@ -68,6 +68,7 @@ public:
 
         ParBilinearForm a_loc(&fespace);
         a_loc.AddDomainIntegrator(new DiffusionIntegrator);
+        a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);     // partial assembly
         a_loc.Assemble();
 
         ParLinearForm b_loc(&fespace);
@@ -75,16 +76,19 @@ public:
 
         OperatorPtr A_loc;
         Vector X_loc, B_loc;
-
+        
         a_loc.FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
 
+        OperatorJacobiSmoother jacobi;  // jacobi preconditioner
+        jacobi.SetOperator(*A_loc);
+
         CGSolver cg(MPI_COMM_WORLD);
-        cg.SetPreconditioner(*prec);
+        cg.SetPreconditioner(jacobi);
         cg.SetOperator(*A_loc);
         cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
         cg.SetPrintLevel(0);
-        cg.SetMaxIter(400);
+        cg.SetMaxIter(1000);
         cg.Mult(B_loc, X_loc);
 
         a_loc.RecoverFEMSolution(X_loc, b_loc, phi);
@@ -111,7 +115,7 @@ int main(int argc, char *argv[])
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "wave-tank.mesh";
+    const char *mesh_file = "../Meshes/wave-tank.mesh";
 
     if (myid == 0)
     {
@@ -120,7 +124,7 @@ int main(int argc, char *argv[])
     }
 
     // ========= START P-CONVERGENCE LOOP =========
-    for (int order = 1; order <= 8; order++)
+    for (int order = 1; order <= 10; order++)
     {
         Mesh mesh_serial(mesh_file, 1, 1);
         int dim = mesh_serial.Dimension();
@@ -154,7 +158,7 @@ int main(int argc, char *argv[])
         ParGridFunction eta(&fespace_fs);
         ParGridFunction phi_fs(&fespace_fs);
 
-        double H = 0.05;
+        double H = 0.005;
         double g = 9.81;
 
         Vector bbmin, bbmax;
@@ -163,13 +167,17 @@ int main(int argc, char *argv[])
         double Lx = bbmax(0) - bbmin(0);
         double h  = bbmax(2) - bbmin(2);
 
-        double m = 2.0;
+        int m = 1;
         double k  = m * 2.0 * M_PI / Lx;
         double kh = k * h;
 
         double omega = sqrt(g * k * tanh(kh));
         double T     = 2.0 * M_PI / omega;
         double cwave = omega / k;
+        
+        if(order == 1){
+        cout << "k=" << k << ", kh=" << kh << ", omega=" << omega << ", T=" << T << ", cwave=" << cwave << endl;
+        }
 
         ODESolver *ode_solver = new RK4Solver();
         double t = 0.0;
@@ -216,6 +224,9 @@ int main(int argc, char *argv[])
 
         int nsteps = 100;
         double dt = t_final / nsteps;
+        if(order==1){
+        cout << "dt=" << dt << endl;
+        }
 
         for (int step = 0; step < nsteps + 1; step++)
         {
