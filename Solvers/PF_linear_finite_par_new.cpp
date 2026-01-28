@@ -117,6 +117,7 @@ public:
         // prec = new HypreBoomerAMG;
         // prec->SetPrintLevel(0);
 
+        // Assemble operator matrix once
         a_loc_cach = new ParBilinearForm(&fespace);
         a_loc_cach->AddDomainIntegrator(new DiffusionIntegrator);
         a_loc_cach->SetAssemblyLevel(AssemblyLevel::PARTIAL);
@@ -226,9 +227,10 @@ public:
         const int Nv = fespace_fs.GetVSize();
 
         // ======== Ramping for wave generation ========
-        const double n_ramp = 10.0;     // Higher generation activation (ramp) for partial&jacobi compared to the same script with full assembly & PCG
+        const double n_ramp = 5.0;     // Higher generation activation (ramp) for partial&jacobi compared to the same script with full assembly & PCG
         const double Tramp  = n_ramp * T;
 
+        // Embedded penalty forcing technique to the rhs operator
         double alpha_gen = t_stage / Tramp;
         alpha_gen = min(1.0, max(0.0, alpha_gen));
 
@@ -309,7 +311,7 @@ int main(int argc, char *argv[])
     const double kh = k * h;
     const double cwave = sqrt((g / k) * tanh(kh));
     const double T_input = lambda / cwave;
-    double t_final = 15 * T_input; // final time
+    double t_final = 8 * T_input; // final time
     const double omega = 2.0 * M_PI / T_input;
 
     if (myid == 0)
@@ -352,7 +354,7 @@ int main(int argc, char *argv[])
     // ========= TIME PARAMETERS =========
     double t = 0.0; // start time --> final time is defined in wave parameters line 262
 
-    int nsteps = 450;
+    int nsteps = 240;
     double dt = t_final / nsteps;
     cout << dt << endl;
 
@@ -418,8 +420,7 @@ int main(int argc, char *argv[])
         if (x <= xg0) return 1.0;
         if (x >= xg1) return 0.0;
         const double xi = (x - xg0) / (xg1 - xg0);
-        const double s = 1 - xi;
-        return -2.0 * s*s*s + 3.0 * s*s;
+        return 1 - (-2.0 * xi*xi*xi + 3.0 * xi*xi);
     });
 
     ParGridFunction Cgen_gf(&fespace_fs);
@@ -447,14 +448,14 @@ int main(int argc, char *argv[])
 
      // ========  START PLOTTING ==========
     // ==================== ParaView output (volume + surface + relaxation functions) ====================
-    ParaViewDataCollection pv_vol("potential_flow_vol_partial3", &mesh);
+    ParaViewDataCollection pv_vol("potential_flow_vol_partial4", &mesh);
     pv_vol.SetPrefixPath("ParaView");
     pv_vol.SetLevelsOfDetail(5*order);
     pv_vol.SetDataFormat(VTKFormat::BINARY);
     pv_vol.SetHighOrderOutput(true);
     pv_vol.RegisterField("phi", &phi);
 
-    ParaViewDataCollection pv_fs("potential_flow_fs_partial3", &mesh_fs);
+    ParaViewDataCollection pv_fs("potential_flow_fs_partial4", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
     pv_fs.SetLevelsOfDetail(5*order);
     pv_fs.SetDataFormat(VTKFormat::BINARY);
@@ -464,7 +465,7 @@ int main(int argc, char *argv[])
     pv_fs.RegisterField("Cabs", &Cabs_gf);
 
     // ============== TIME INTEGRATION =============
-    double tau = dt; // for relaxation
+    double tau = 1/omega; // for relaxation
 
     ODESolver *ode_solver = new RK4Solver();
     rhs_linear surface(&fespace_fs, &fespace,

@@ -478,7 +478,7 @@ int main(int argc, char *argv[])
         }
 
         // Save ParaView files
-        if (step % 10 == 0)
+        if (step % 1 == 0)
         {
             pv_vol.SetCycle(step);
             pv_vol.SetTime(t);
