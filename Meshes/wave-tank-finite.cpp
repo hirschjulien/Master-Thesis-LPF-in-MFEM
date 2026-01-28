@@ -4,8 +4,8 @@ using namespace mfem;
 int main()
 {
    // Box size and grid
-   const double Lx = 2.0, Ly = 1.0, H = 1.0;
-   const int nx = 4, ny = 2, nz = 2;
+   const double Lx = 2.0, Ly = 0.1, H = 1.0;
+   const int nx = 15, ny = 1, nz = 2;
 
    // Cartesian HEX mesh
    Mesh mesh = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Lx, Ly, H);

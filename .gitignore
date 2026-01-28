@@ -4,9 +4,13 @@
 *.txt
 .DS_Store
 
-/Paraview
+/Solvers/ParaView/
 PF_linear
 laplace_solver
 laplace_solver_p
 laplace_convergence
 wave_tank
+PF_linear_finite_par
+PF_linear_finite_par_new
+PF_linear_periodic
+PF_linear_periodic_par

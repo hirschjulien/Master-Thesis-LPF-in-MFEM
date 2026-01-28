@@ -139,7 +139,7 @@ int main()
 
 
     // ========== Wave Parameters ===========
-    double H = 0.05;
+    double H = 0.005;
     double g = 9.81;
 
     Vector bbmin, bbmax;

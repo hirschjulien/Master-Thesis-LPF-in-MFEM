@@ -7,6 +7,9 @@
 using namespace std;
 using namespace mfem;
 
+// ========== WORKING ===========
+// Full assembly of A with HypreBoomerAMG and CG
+
 // ==================== DISPERSION SOLVER ====================
 // only needed when I choose wave parameters from T
 static inline double coth_safe(double x)
@@ -107,11 +110,11 @@ public:
           deta_v(&fespace_fs),
           dphi_v(&fespace_fs)
     {
-        // prec = new HypreBoomerAMG;
-        // prec->SetPrintLevel(0);
+        prec = new HypreBoomerAMG;
+        prec->SetPrintLevel(0);
     }
 
-    //~rhs_linear() { delete prec; }
+    ~rhs_linear() { delete prec; }
 
     void Mult(const Vector &eta_phifs_true,
               Vector &d_eta_phifs_true_dt) const override
@@ -132,7 +135,6 @@ public:
 
         ParBilinearForm a_loc(&fespace);
         a_loc.AddDomainIntegrator(new DiffusionIntegrator);
-        a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);      // partial assembly
         a_loc.Assemble();
 
         ParLinearForm b_loc(&fespace);
@@ -143,11 +145,8 @@ public:
 
         a_loc.FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
 
-        OperatorJacobiSmoother jacobi;  // jacobi preconditioner
-        jacobi.SetOperator(*A_loc);
-
         CGSolver cg(MPI_COMM_WORLD);
-        cg.SetPreconditioner(jacobi);
+        cg.SetPreconditioner(*prec);
         cg.SetOperator(*A_loc);
         cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
@@ -244,9 +243,9 @@ int main(int argc, char *argv[])
         // ========== MESH etc. ============
     int order = 4;
     int ref_levels = 0;
-    int par_ref_levels = 0;
+    int par_ref_levels = 1;
 
-    const char *mesh_file = "../Meshes/mesh_cylinder.msh"; // choose "wave-tank-finite.mesh" for basic case and increase order
+    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; // choose "wave-tank-finite.mesh" for basic case and increase order
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -473,7 +472,7 @@ int main(int argc, char *argv[])
         // update eta for output
         eta.SetFromTrueDofs(eta_phi_fs.GetBlock(0));
 
-        if (myid == 0 && step % 100 == 0)
+        if (myid == 0 && step % 10 == 0)
         {
             cout << "Step " << step << " / " << nsteps << ", t = " << t << endl;
         }
