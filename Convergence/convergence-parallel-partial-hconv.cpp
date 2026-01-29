@@ -256,21 +256,36 @@ int main(int argc, char *argv[])
             const double arg      = omega * t - k * (kx_dir * X(0) + ky_dir * X(1));
             return -0.5 * H * cwave * vertical * sin(arg);
         });
-
-        double local_err = phi.ComputeMaxError(phi_exact_coef);
+        
+        // ----- eta -------
+        double local_err = eta.ComputeMaxError(eta_init);
         double global_err = 0.0;
         MPI_Allreduce(&local_err, &global_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
-        const int ndofs = fespace.GetTrueVSize();
-
         if (myid == 0)
         {
-            cout << (h_convergence ? "h_level = " : "order = ") << it          // *** CHANGED
-                << "  order = " << order                                      // *** CHANGED (prints order in both modes)
+            cout << (h_convergence ? "h_level = " : "order = ") << it         
+                << "  order = " << order                                     
                 << "  dofs = " << ndofs
-                << "  ||phi - phi_exact||_inf = "
+                << "  ||eta - eta_exact||_inf = "
                 << global_err << endl;
         }
+
+        // -------- phi ---------
+        // double local_err = phi.ComputeMaxError(phi_exact_coef);
+        // double global_err = 0.0;
+        // MPI_Allreduce(&local_err, &global_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+        // const int ndofs = fespace.GetTrueVSize();
+
+        // if (myid == 0)
+        // {
+        //     cout << (h_convergence ? "h_level = " : "order = ") << it        
+        //         << "  order = " << order                                     
+        //         << "  dofs = " << ndofs
+        //         << "  ||phi - phi_exact||_inf = "
+        //         << global_err << endl;
+        // }
 
         delete ode_solver;
         delete fec_fs;

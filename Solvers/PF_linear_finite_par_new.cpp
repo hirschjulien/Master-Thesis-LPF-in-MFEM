@@ -150,7 +150,7 @@ public:
         // a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);      // partial assembly
         // a_loc.Assemble();
 
-        phi.ExchangeFaceNbrData();
+        //phi.ExchangeFaceNbrData();
 
         ParLinearForm b_loc(&fespace);
         b_loc.Assemble();
@@ -169,14 +169,14 @@ public:
         cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
         cg.SetPrintLevel(0);
-        cg.SetMaxIter(5000);
+        cg.SetMaxIter(1000);
         cg.Mult(B_loc, X_loc);
 
         a_loc_cach->RecoverFEMSolution(X_loc, b_loc, phi);
 
-        phi.ExchangeFaceNbrData();
+        //phi.ExchangeFaceNbrData();
         phi.GetDerivative(1, 2, w);
-        w.ExchangeFaceNbrData();
+        //w.ExchangeFaceNbrData();
         mesh_fs.Transfer(w, w_tilde);
 
         w_tilde.GetTrueDofs(deta_true_dt);
@@ -227,7 +227,7 @@ public:
         const int Nv = fespace_fs.GetVSize();
 
         // ======== Ramping for wave generation ========
-        const double n_ramp = 5.0;     // Higher generation activation (ramp) for partial&jacobi compared to the same script with full assembly & PCG
+        const double n_ramp = 3.0;     // Higher generation activation (ramp) for partial&jacobi compared to the same script with full assembly & PCG
         const double Tramp  = n_ramp * T;
 
         // Embedded penalty forcing technique to the rhs operator
@@ -264,9 +264,9 @@ int main(int argc, char *argv[])
         // ========== MESH etc. ============
     int order = 4;
     int ref_levels = 0;
-    int par_ref_levels = 1;
+    int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; // choose "wave-tank-finite.mesh" for basic case and increase order or mesh_cylinder_big.msh for cylinder case
+    const char *mesh_file = "../Meshes/mesh_cylinder_new.msh"; // choose "wave-tank-finite.mesh" for stream function wave  or for cylinder case
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -304,14 +304,14 @@ int main(int argc, char *argv[])
     const double Lx = bbmax(0) - bbmin(0);
 
     // ================= Choose the wave by wave length lambda =================  
-    const double lambda = 0.22;
+    const double lambda = 2.0;
 
     const double k     = 2.0 * M_PI / lambda;
 
     const double kh = k * h;
     const double cwave = sqrt((g / k) * tanh(kh));
     const double T_input = lambda / cwave;
-    double t_final = 8 * T_input; // final time
+    double t_final = 5 * T_input; // final time
     const double omega = 2.0 * M_PI / T_input;
 
     if (myid == 0)
@@ -354,7 +354,7 @@ int main(int argc, char *argv[])
     // ========= TIME PARAMETERS =========
     double t = 0.0; // start time --> final time is defined in wave parameters line 262
 
-    int nsteps = 240;
+    int nsteps = 150;
     double dt = t_final / nsteps;
     cout << dt << endl;
 
@@ -410,7 +410,7 @@ int main(int argc, char *argv[])
     fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
     // ==================== RELAXATION FUNCTIONS Cgen and Cabs ====================
-    const double Ng  = 2.0;
+    const double Ng  = 3.0;
     const double xg0 = bbmin(0);
     const double xg1 = xg0 + Ng * lambda;
 
@@ -426,7 +426,7 @@ int main(int argc, char *argv[])
     ParGridFunction Cgen_gf(&fespace_fs);
     Cgen_gf.ProjectCoefficient(Cgen_coef);
 
-    const double Ns = 2.0;
+    const double Ns = 3.0;
     const double x1 = bbmax(0);
     const double x0 = x1 - Ns * lambda;
     const double p = 5.0;
@@ -448,14 +448,14 @@ int main(int argc, char *argv[])
 
      // ========  START PLOTTING ==========
     // ==================== ParaView output (volume + surface + relaxation functions) ====================
-    ParaViewDataCollection pv_vol("potential_flow_vol_partial4", &mesh);
+    ParaViewDataCollection pv_vol("PF_linear_finite_par_new_vol_cylinder", &mesh);
     pv_vol.SetPrefixPath("ParaView");
     pv_vol.SetLevelsOfDetail(5*order);
     pv_vol.SetDataFormat(VTKFormat::BINARY);
     pv_vol.SetHighOrderOutput(true);
     pv_vol.RegisterField("phi", &phi);
 
-    ParaViewDataCollection pv_fs("potential_flow_fs_partial4", &mesh_fs);
+    ParaViewDataCollection pv_fs("PF_linear_finite_par_new_fs_cylinder", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
     pv_fs.SetLevelsOfDetail(5*order);
     pv_fs.SetDataFormat(VTKFormat::BINARY);

@@ -64,6 +64,7 @@ private:
     mutable ParGridFunction dphi_v;
 
     HypreBoomerAMG *prec;
+    mutable ParBilinearForm *a_loc;
 
 public:
     rhs_linear(ParFiniteElementSpace *fes_fs,
@@ -112,9 +113,13 @@ public:
     {
         prec = new HypreBoomerAMG;
         prec->SetPrintLevel(0);
+
+        a_loc = new ParBilinearForm(&fespace);
+        a_loc->AddDomainIntegrator(new DiffusionIntegrator);
+        a_loc->Assemble();
     }
 
-    ~rhs_linear() { delete prec; }
+    ~rhs_linear() { delete prec; delete a_loc;}
 
     void Mult(const Vector &eta_phifs_true,
               Vector &d_eta_phifs_true_dt) const override
@@ -133,9 +138,9 @@ public:
 
         mesh_fs.Transfer(phi_fs_stage_gf, phi);
 
-        ParBilinearForm a_loc(&fespace);
-        a_loc.AddDomainIntegrator(new DiffusionIntegrator);
-        a_loc.Assemble();
+        // ParBilinearForm a_loc(&fespace);
+        // a_loc.AddDomainIntegrator(new DiffusionIntegrator);
+        // a_loc.Assemble();
 
         ParLinearForm b_loc(&fespace);
         b_loc.Assemble();
@@ -143,7 +148,7 @@ public:
         OperatorPtr A_loc;
         Vector X_loc, B_loc;
 
-        a_loc.FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
+        a_loc->FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
 
         CGSolver cg(MPI_COMM_WORLD);
         cg.SetPreconditioner(*prec);
@@ -154,7 +159,7 @@ public:
         cg.SetMaxIter(1000);
         cg.Mult(B_loc, X_loc);
 
-        a_loc.RecoverFEMSolution(X_loc, b_loc, phi);
+        a_loc->RecoverFEMSolution(X_loc, b_loc, phi);
 
         phi.GetDerivative(1, 2, w);
         mesh_fs.Transfer(w, w_tilde);
@@ -243,9 +248,9 @@ int main(int argc, char *argv[])
         // ========== MESH etc. ============
     int order = 4;
     int ref_levels = 0;
-    int par_ref_levels = 1;
+    int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; // choose "wave-tank-finite.mesh" for basic case and increase order
+    const char *mesh_file = "../Meshes/mesh_cylinder_new.msh"; // choose "wave-tank-finite.mesh" or mesh_cylinder_new.msh
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -282,14 +287,14 @@ int main(int argc, char *argv[])
     const double Lx = bbmax(0) - bbmin(0);
 
     // ================= Choose the wave by wave length lambda =================  
-    const double lambda = 0.22;
+    const double lambda = 2.0;
 
     const double k     = 2.0 * M_PI / lambda;
 
     const double kh = k * h;
     const double cwave = sqrt((g / k) * tanh(kh));
     const double T_input = lambda / cwave;
-    double t_final = 2 * T_input; // final time
+    double t_final = 5 * T_input; // final time
     const double omega = 2.0 * M_PI / T_input;
 
     if (myid == 0)
@@ -332,7 +337,7 @@ int main(int argc, char *argv[])
     // ========= TIME PARAMETERS =========
     double t = 0.0; // start time --> final time is defined in wave parameters line 262
 
-    int nsteps = 60;
+    int nsteps = 150;
     double dt = t_final / nsteps;
 
 
@@ -387,7 +392,7 @@ int main(int argc, char *argv[])
     fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
     // ==================== RELAXATION FUNCTIONS Cgen and Cabs ====================
-    const double Ng  = 2.0;
+    const double Ng  = 3.0;
     const double xg0 = bbmin(0);
     const double xg1 = xg0 + Ng * lambda;
 
@@ -397,14 +402,13 @@ int main(int argc, char *argv[])
         if (x <= xg0) return 1.0;
         if (x >= xg1) return 0.0;
         const double xi = (x - xg0) / (xg1 - xg0);
-        const double s = 1 - xi;
-        return -2.0 * s*s*s + 3.0 * s*s;
+        return 1 - (-2.0 * xi*xi*xi + 3.0 * xi*xi);
     });
 
     ParGridFunction Cgen_gf(&fespace_fs);
     Cgen_gf.ProjectCoefficient(Cgen_coef);
 
-    const double Ns = 2.0;
+    const double Ns = 3.0;
     const double x1 = bbmax(0);
     const double x0 = x1 - Ns * lambda;
     const double p = 5.0;
@@ -426,16 +430,18 @@ int main(int argc, char *argv[])
 
      // ========  START PLOTTING ==========
     // ==================== ParaView output (volume + surface + relaxation functions) ====================
-    ParaViewDataCollection pv_vol("potential_flow_vol", &mesh);
+    ParaViewDataCollection pv_vol("PF_linear_finite_par_vol_cylinder", &mesh);
+    //ParaViewDataCollection pv_vol("PF_linear_finite_par_vol", &mesh);
     pv_vol.SetPrefixPath("ParaView");
-    pv_vol.SetLevelsOfDetail(order);
+    pv_vol.SetLevelsOfDetail(5*order);
     pv_vol.SetDataFormat(VTKFormat::BINARY);
     pv_vol.SetHighOrderOutput(true);
     pv_vol.RegisterField("phi", &phi);
 
-    ParaViewDataCollection pv_fs("potential_flow_fs", &mesh_fs);
+    ParaViewDataCollection pv_fs("PF_linear_finite_par_fs_cylinder", &mesh_fs);
+    //ParaViewDataCollection pv_fs("PF_linear_finite_par_fs", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
-    pv_fs.SetLevelsOfDetail(order);
+    pv_fs.SetLevelsOfDetail(5*order);
     pv_fs.SetDataFormat(VTKFormat::BINARY);
     pv_fs.SetHighOrderOutput(true);
     pv_fs.RegisterField("eta", &eta);

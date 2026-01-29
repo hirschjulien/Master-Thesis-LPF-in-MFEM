@@ -76,7 +76,7 @@ public:
 
     mesh_fs.Transfer(phi_fs_stage_gf, phi);
 
-    phi.ExchangeFaceNbrData(); // ensure essential BC values are consistent BEFORE elimination
+    //phi.ExchangeFaceNbrData(); // ensure essential BC values are consistent BEFORE elimination
 
     ParLinearForm b_loc(&fespace);
     b_loc.Assemble();
@@ -100,9 +100,9 @@ public:
 
     a_loc_cached->RecoverFEMSolution(X_loc, b_loc, phi);
 
-    phi.ExchangeFaceNbrData();
+    //phi.ExchangeFaceNbrData();
     phi.GetDerivative(1, 2, w);
-    w.ExchangeFaceNbrData();
+    //w.ExchangeFaceNbrData();
     mesh_fs.Transfer(w, w_tilde);
 
     w_tilde.GetTrueDofs(deta_true_dt);
@@ -176,13 +176,13 @@ int main(int argc, char *argv[])
         double T     = 2.0 * M_PI / omega;
         double cwave = omega / k;
         
-        if(order == 1){
+        if(myid == 0){
         cout << "k=" << k << ", kh=" << kh << ", omega=" << omega << ", T=" << T << ", cwave=" << cwave << endl;
         }
 
         ODESolver *ode_solver = new RK4Solver();
         double t = 0.0;
-        double t_final = T;
+        double t_final = 2*T;
 
         double theta = 0.0;
         double kx_dir = cos(theta);
@@ -221,14 +221,14 @@ int main(int argc, char *argv[])
         fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
     // ========  START PLOTTING (kept in the parallel style) ==========
-    ParaViewDataCollection pv_vol("potential_flow_vol_periodic", &mesh);
+    ParaViewDataCollection pv_vol("potential_flow_vol_periodic_comp2", &mesh);
     pv_vol.SetPrefixPath("ParaView");
     pv_vol.SetLevelsOfDetail(5*order);
     pv_vol.SetDataFormat(VTKFormat::BINARY);
     pv_vol.SetHighOrderOutput(true);
     pv_vol.RegisterField("phi", &phi);
 
-    ParaViewDataCollection pv_fs("potential_flow_fs_periodic", &mesh_fs);
+    ParaViewDataCollection pv_fs("potential_flow_fs_periodic_comp2", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
     pv_fs.SetLevelsOfDetail(5*order);
     pv_fs.SetDataFormat(VTKFormat::BINARY);
@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
 
     ode_solver->Init(surface);
 
-            int nsteps = 100;
+            int nsteps = 60;
         double dt = t_final / nsteps;
 
     if (myid == 0)

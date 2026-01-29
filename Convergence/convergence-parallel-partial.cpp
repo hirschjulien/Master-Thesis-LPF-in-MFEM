@@ -80,7 +80,7 @@ public:
         // a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);     // partial assembly
         // a_loc.Assemble();
         
-        phi.ExchangeFaceNbrData()   //
+        //phi.ExchangeFaceNbrData()   //
 
         ParLinearForm b_loc(&fespace);
         b_loc.Assemble();
@@ -96,7 +96,7 @@ public:
         CGSolver cg(MPI_COMM_WORLD);
         cg.SetPreconditioner(jacobi);
         cg.SetOperator(*A_loc);
-        cg.SetRelTol(1e-24);
+        cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
         cg.SetPrintLevel(0);
         cg.SetMaxIter(2000);
@@ -104,9 +104,9 @@ public:
 
         a_loc_cached->RecoverFEMSolution(X_loc, b_loc, phi);
 
-        phi.ExchangeFaceNbrData();
+        //phi.ExchangeFaceNbrData();
         phi.GetDerivative(1, 2, w);
-        w.ExchangeFaceNbrData();
+        //w.ExchangeFaceNbrData();
         mesh_fs.Transfer(w, w_tilde);
 
         w_tilde.GetTrueDofs(deta_true_dt);
@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
 
         int nsteps = 100;
         double dt = t_final / nsteps;
-        if(order==1){
+        if(order==1 && myid==0){
         cout << "dt=" << dt << endl;
         }
 
@@ -257,7 +257,9 @@ int main(int argc, char *argv[])
             return -0.5 * H * cwave * vertical * sin(arg);
         });
 
-        double local_err = phi.ComputeMaxError(phi_exact_coef);
+
+        // ------ eta ----
+        double local_err = eta.ComputeMaxError(eta_init);
         double global_err = 0.0;
         MPI_Allreduce(&local_err, &global_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
@@ -267,9 +269,24 @@ int main(int argc, char *argv[])
         {
             cout << "order = " << order
                 << "  dofs = " << ndofs
-                << "  ||phi - phi_exact||_inf = "
+                << "  ||eta - eta_exact||_inf = "
                 << global_err << endl;
         }
+
+        // ---- phi ------
+        // double local_err = phi.ComputeMaxError(phi_exact_coef);
+        // double global_err = 0.0;
+        // MPI_Allreduce(&local_err, &global_err, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+        // const int ndofs = fespace.GetTrueVSize();
+
+        // if (myid == 0)
+        // {
+        //     cout << "order = " << order
+        //         << "  dofs = " << ndofs
+        //         << "  ||phi - phi_exact||_inf = "
+        //         << global_err << endl;
+        // }
 
 
 

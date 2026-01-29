@@ -5,7 +5,7 @@ int main()
 {
    // Box size and grid
    const double Lx = 2.0, Ly = 0.1, H = 1.0;
-   const int nx = 4, ny = 2, nz = 2;
+   const int nx = 8, ny = 1, nz = 2;
 
    // Cartesian HEX mesh
    Mesh base = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Lx, Ly, H);
