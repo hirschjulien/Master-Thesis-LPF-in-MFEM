@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/mesh_cylinder_new.msh"; // choose "wave-tank-finite.mesh" or mesh_cylinder_new.msh
+    const char *mesh_file = "../Meshes/cyl.msh"; // choose "wave-tank-finite.mesh" or cyl.msh.msh
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();

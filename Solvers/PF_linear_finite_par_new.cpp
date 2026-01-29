@@ -266,7 +266,7 @@ int main(int argc, char *argv[])
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/mesh_cylinder_new.msh"; // choose "wave-tank-finite.mesh" for stream function wave  or for cylinder case
+    const char *mesh_file = "../Meshes/cyl.msh"; // choose "wave-tank-finite.mesh" for stream function wave or cyl.msh for cylinder case
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -448,12 +448,12 @@ int main(int argc, char *argv[])
 
      // ========  START PLOTTING ==========
     // ==================== ParaView output (volume + surface + relaxation functions) ====================
-    ParaViewDataCollection pv_vol("PF_linear_finite_par_new_vol_cylinder", &mesh);
-    pv_vol.SetPrefixPath("ParaView");
-    pv_vol.SetLevelsOfDetail(5*order);
-    pv_vol.SetDataFormat(VTKFormat::BINARY);
-    pv_vol.SetHighOrderOutput(true);
-    pv_vol.RegisterField("phi", &phi);
+    // ParaViewDataCollection pv_vol("PF_linear_finite_par_new_vol_cylinder", &mesh);
+    // pv_vol.SetPrefixPath("ParaView");
+    // pv_vol.SetLevelsOfDetail(5*order);
+    // pv_vol.SetDataFormat(VTKFormat::BINARY);
+    // pv_vol.SetHighOrderOutput(true);
+    // pv_vol.RegisterField("phi", &phi);
 
     ParaViewDataCollection pv_fs("PF_linear_finite_par_new_fs_cylinder", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
@@ -494,7 +494,7 @@ int main(int argc, char *argv[])
         // update eta for output
         eta.SetFromTrueDofs(eta_phi_fs.GetBlock(0));
 
-        if (myid == 0 && step % 10 == 0)
+        if (myid == 0 && step % 1 == 0)
         {
             cout << "Step " << step << " / " << nsteps << ", t = " << t << endl;
         }
@@ -502,9 +502,9 @@ int main(int argc, char *argv[])
         // Save ParaView files
         if (step % 1 == 0)
         {
-            pv_vol.SetCycle(step);
-            pv_vol.SetTime(t);
-            pv_vol.Save();
+            // pv_vol.SetCycle(step);
+            // pv_vol.SetTime(t);
+            // pv_vol.Save();
 
             pv_fs.SetCycle(step);
             pv_fs.SetTime(t);
