@@ -26,3 +26,5 @@ ws
 laplace_solver_p_par
 pf-u
 wave-tank-finite
+cylinder-exact
+cylinder-diffraction
