@@ -14,3 +14,15 @@ PF_linear_finite_par
 PF_linear_finite_par_new
 PF_linear_periodic
 PF_linear_periodic_par
+convergence-parallel
+convergence-parallel-hconv
+convergence-parallel-partial
+convergence-parallel-partial-hconv
+laplace-parallel-hconv
+laplace-parallel-pconv
+ss
+strong-scaling
+ws
+laplace_solver_p_par
+pf-u
+wave-tank-finite

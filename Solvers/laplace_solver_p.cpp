@@ -12,7 +12,7 @@ int main (int argc, char *argv[])
     int num_procs = Mpi::WorldSize();       // Total number of MPI ranks
     int myid = Mpi::WorldRank();            // This rank's id
 
-    int order = 4;
+    int order = 8;
     int ref_levels = 0;
     int par_ref_levels = 0;
 

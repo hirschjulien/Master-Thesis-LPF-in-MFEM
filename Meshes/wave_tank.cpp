@@ -4,8 +4,14 @@ using namespace mfem;
 int main()
 {
    // Box size and grid
-   const double Lx = 2.0, Ly = 0.1, H = 1.0;
-   const int nx = 8, ny = 1, nz = 2;
+   // const double Lx = 2.0, Ly = 0.1, H = 1.0;
+   // const int nx = 8, ny = 1, nz = 2;
+
+   // const double Lx = 1.0, Ly = 0.1, H = 1 / (2*M_PI);
+   // const int nx = 3, ny = 1, nz = 1;
+
+   const double Lx = 1.0, Ly = 0.1, H = 1 / (2*M_PI);
+   const int nx = 128, ny = 2, nz = 16;
 
    // Cartesian HEX mesh
    Mesh base = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Lx, Ly, H);
@@ -40,5 +46,5 @@ int main()
       if (attr) { mesh.GetBdrElement(be)->SetAttribute(attr); }
    }
 
-   mesh.Save("wave-tank.mesh");
+   mesh.Save("wave-tank-big8.mesh");
 }
