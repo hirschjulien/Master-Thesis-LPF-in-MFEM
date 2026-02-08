@@ -5,6 +5,8 @@
 using namespace std;
 using namespace mfem;
 
+// FINAL LAPLACE SOLVER
+
 int main (int argc, char *argv[])
 {
     Mpi::Init(argc, argv);                  // Initialize MPI (must be first MFEM call in parallel)

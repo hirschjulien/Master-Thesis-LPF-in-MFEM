@@ -5,6 +5,8 @@
 using namespace std;
 using namespace mfem;
 
+// SERIAL LAPLACE SOLVER
+
 int main (){
     int order = 4;
     int ref_levels = 2; // 0 --> 16 Elements
