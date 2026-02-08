@@ -146,13 +146,6 @@ public:
 
         mesh_fs.Transfer(phi_fs_stage_gf, phi);
 
-        // ParBilinearForm a_loc(&fespace);
-        // a_loc.AddDomainIntegrator(new DiffusionIntegrator);
-        // a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);      // partial assembly
-        // a_loc.Assemble();
-
-        //phi.ExchangeFaceNbrData();
-
         ParLinearForm b_loc(&fespace);
         b_loc.Assemble();
 
@@ -265,7 +258,6 @@ int main(int argc, char *argv[])
 
     // choose "wave-tank-finite.mesh" for stream function wave on finite odmain, 
     // "cylinder-mesh-half.msh" for cylinder case
-    // "wave-tank.mesh" for periodic case
     const char *mesh_file = "../Meshes/wave-tank-finite.mesh"; 
 
     Mesh mesh_serial(mesh_file, 1, 1);

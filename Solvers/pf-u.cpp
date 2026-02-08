@@ -61,8 +61,6 @@ private:
     mutable ParGridFunction deta_v;
     mutable ParGridFunction dphi_v;
 
-    //HypreBoomerAMG *prec;
-
     mutable ParBilinearForm *a_loc_cach = nullptr;
     mutable OperatorJacobiSmoother *jacobi;
 
@@ -111,21 +109,15 @@ public:
           deta_v(&fespace_fs),
           dphi_v(&fespace_fs)
     {
-        // prec = new HypreBoomerAMG;
-        // prec->SetPrintLevel(0);
-
-        // Assemble operator matrix once
         a_loc_cach = new ParBilinearForm(&fespace);
         a_loc_cach->AddDomainIntegrator(new DiffusionIntegrator);
         a_loc_cach->SetAssemblyLevel(AssemblyLevel::PARTIAL);
         a_loc_cach->Assemble();
 
-        
-        jacobi = new OperatorJacobiSmoother(*a_loc_cach, ess_tdof); //jacobi needs to know ess_tdof, so it can avoid those boundaries to be updated and therefore fits to the constrined operator A_loc
-        
+        jacobi = new OperatorJacobiSmoother(*a_loc_cach, ess_tdof);
     }
 
-    ~rhs_linear() { delete jacobi; delete a_loc_cach;}
+    ~rhs_linear() { delete jacobi; delete a_loc_cach; }
 
     void Mult(const Vector &eta_phifs_true,
               Vector &d_eta_phifs_true_dt) const override
@@ -138,20 +130,11 @@ public:
 
         Vector deta_true_dt (d_eta_phifs_true_dt.GetData(), Nt);
         Vector dphfs_true_dt(d_eta_phifs_true_dt.GetData() + Nt, Nt);
-        
-        // eta_true and phi_true are stored as T-vectors (Vector). These are global true dof and might be missing hanging nodes compared to local dof represented by L-vector (Gridfunction)
-        // so in order to do operations, I have to switch form Vector to gridfunction first
+
         eta_stage_gf.SetFromTrueDofs(eta_true);
         phi_fs_stage_gf.SetFromTrueDofs(phfs_true);
 
         mesh_fs.Transfer(phi_fs_stage_gf, phi);
-
-        // ParBilinearForm a_loc(&fespace);
-        // a_loc.AddDomainIntegrator(new DiffusionIntegrator);
-        // a_loc.SetAssemblyLevel(AssemblyLevel::PARTIAL);      // partial assembly
-        // a_loc.Assemble();
-
-        //phi.ExchangeFaceNbrData();
 
         ParLinearForm b_loc(&fespace);
         b_loc.Assemble();
@@ -159,13 +142,10 @@ public:
         OperatorPtr A_loc;
         Vector X_loc, B_loc;
 
-        a_loc_cach->FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);    // After this, A_loc is a constrained operator, where ess_tdof have been "removed" so that fixed boundary values are not updated
-
-        // OperatorJacobiSmoother jacobi;  // jacobi preconditioner
-        //jacobi->SetOperator(*A_loc);
+        a_loc_cach->FormLinearSystem(ess_tdof, phi, b_loc, A_loc, X_loc, B_loc);
 
         CGSolver cg(MPI_COMM_WORLD);
-        cg.SetPreconditioner(*jacobi);  //jacobi has to be conform to A_loc (ess_tdof in the initialization)
+        cg.SetPreconditioner(*jacobi);
         cg.SetOperator(*A_loc);
         cg.SetRelTol(1e-12);
         cg.SetAbsTol(0.0);
@@ -175,9 +155,7 @@ public:
 
         a_loc_cach->RecoverFEMSolution(X_loc, b_loc, phi);
 
-        //phi.ExchangeFaceNbrData();
         phi.GetDerivative(1, 2, w);
-        //w.ExchangeFaceNbrData();
         mesh_fs.Transfer(w, w_tilde);
 
         w_tilde.GetTrueDofs(deta_true_dt);
@@ -188,7 +166,6 @@ public:
         // ========= RELAXATION ZONES =========
         const double t_stage = this->GetTime();
 
-        // exact solutions to define relaxation function
         auto phase = [&](const Vector &Xfs) -> double
         {
             return omega * t_stage - k * (kx_dir * Xfs(0) + ky_dir * Xfs(1));
@@ -207,7 +184,6 @@ public:
         eta_e.ProjectCoefficient(eta_exact);
         phi_fs_e.ProjectCoefficient(phi_fs_exact);
 
-        // ======== Get gridfunction from true dof. True dof are possibly missing nodes =======
         deta_v.SetFromTrueDofs(deta_true_dt);
         dphi_v.SetFromTrueDofs(dphfs_true_dt);
 
@@ -227,11 +203,9 @@ public:
 
         const int Nv = fespace_fs.GetVSize();
 
-        // ======== Ramping for wave generation ========
-        const double n_ramp = 3.0;     // Higher generation activation (ramp) for partial&jacobi compared to the same script with full assembly & PCG
+        const double n_ramp = 3.0;
         const double Tramp  = n_ramp * T;
 
-        // Embedded penalty forcing technique to the rhs operator
         double alpha_gen = t_stage / Tramp;
         alpha_gen = min(1.0, max(0.0, alpha_gen));
 
@@ -245,11 +219,11 @@ public:
             deta[i] += (gen_weight * inv_tau) * (eta_ex[i] - eta_vdat[i]);
             dphi[i] += (gen_weight * inv_tau) * (phi_ex[i] - phi_vdat[i]);
 
+            // absorption: drive to zero
             deta[i] += (cabs * inv_tau) * (0.0 - eta_vdat[i]);
             dphi[i] += (cabs * inv_tau) * (0.0 - phi_vdat[i]);
         }
 
-        // ======== back to true dof ========
         deta_v.GetTrueDofs(deta_true_dt);
         dphi_v.GetTrueDofs(dphfs_true_dt);
     }
@@ -262,12 +236,12 @@ int main(int argc, char *argv[])
     int num_procs = Mpi::WorldSize();
     int myid = Mpi::WorldRank();
 
-        // ========== MESH etc. ============
+    // ========== MESH etc. ============
     int order = 4;
     int ref_levels = 0;
     int par_ref_levels = 0;
 
-    const char *mesh_file = "../Meshes/ushape.msh"; // choose "wave-tank-finite.mesh" for stream function wave or cylinder.msh for cylinder case
+    const char *mesh_file = "../Meshes/ushape.msh";
 
     Mesh mesh_serial(mesh_file, 1, 1);
     int dim = mesh_serial.Dimension();
@@ -285,8 +259,14 @@ int main(int argc, char *argv[])
     FiniteElementCollection *fec = new H1_FECollection(order, dim);
     ParFiniteElementSpace fespace(&mesh, fec);
 
+    // ================= FREE SURFACE SUBMESH =================
+    // IMPORTANT: this must include the generation + absorption top patches.
+    // Attributes: 5 Zh_Straight, 6 Zh_UBend, 7 Zh_Generation, 8 Zh_Absorption
     Array<int> bdr_attr;
-    bdr_attr.Append(2);
+    bdr_attr.Append(5);
+    bdr_attr.Append(6);
+    bdr_attr.Append(7);
+    bdr_attr.Append(8);
     ParSubMesh mesh_fs = ParSubMesh::CreateFromBoundary(mesh, bdr_attr);
     int dim_fs = mesh_fs.Dimension();
 
@@ -301,29 +281,17 @@ int main(int argc, char *argv[])
     mesh.GetBoundingBox(bbmin, bbmax);
 
     double h  = bbmax(2) - bbmin(2);
-
     const double Lx = bbmax(0) - bbmin(0);
 
-    const double lambda = 1.0;      // L = 1
-    const double k      = 2.0*M_PI / lambda; // k = 2π
+    const double lambda = 1.0;
+    const double k      = 2.0*M_PI / lambda;
     const double kh     = 1.0;
     const double ky = 0.0;
     const double cwave = sqrt((g / k) * tanh(kh));
     const double T_input     = lambda / cwave;
     const double omega = 2.0 * M_PI / T_input;
 
-    double t_final = 5 * T_input; // final time
-
-    // ================= Choose the wave by wave length lambda =================  
-    // const double lambda = 2.0;
-
-    // const double k     = 2.0 * M_PI / lambda;
-
-    // const double kh = k * h;
-    // const double cwave = sqrt((g / k) * tanh(kh));
-    // const double T_input = lambda / cwave;
-    // double t_final = 5 * T_input; // final time
-    // const double omega = 2.0 * M_PI / T_input;
+    double t_final = 5 * T_input;
 
     if (myid == 0)
     {
@@ -338,37 +306,12 @@ int main(int argc, char *argv[])
         cout << "  H      = " << H << "\n";
     }
 
-    // // ================= Choose the wave by PERIOD T =================
-    // const double T_input = 1.13392/3;   //  seconds (1.13392 is one period on wave-tank-finite.mesh)
-    // double t_final = 2 * T_input; // final time
-    // const int    n_iter  = 40;
-
-    // const double omega = 2.0 * M_PI / T_input;
-    // const double kh    = DispersionRelationWaves(g, T_input, h, n_iter);
-    // const double k     = kh / h;
-    // const double cwave = omega / k;
-    // const double lambda = 2.0 * M_PI / k;
-
-    // if (myid == 0)
-    // {
-    //     cout << "Wave parameters:\n";
-    //     cout << "  T     = " << T_input << "\n";
-    //     cout << "  omega = " << omega << "\n";
-    //     cout << "  h     = " << h << "\n";
-    //     cout << "  kh    = " << kh << "\n";
-    //     cout << "  k     = " << k << "\n";
-    //     cout << "  lambda= " << lambda << "\n";
-    //     cout << "  cwave = " << cwave << "\n";
-    // }
-
-
     // ========= TIME PARAMETERS =========
-    double t = 0.0; // start time --> final time is defined in wave parameters line 262
+    double t = 0.0;
 
     int nsteps = 180;
     double dt = t_final / nsteps;
     cout << dt << endl;
-
 
     // ========== INITIAL CONDITIONS ========
     double theta = 0.0;
@@ -390,7 +333,6 @@ int main(int argc, char *argv[])
         return -0.5 * H * cwave * cosh(kh)/sinh(kh) * sin(phase(X));
     });
 
-
     int fe_true = fespace_fs.GetTrueVSize();
     Array<int> fe_offset(3);
     fe_offset[0] = 0;
@@ -400,7 +342,6 @@ int main(int argc, char *argv[])
 
     ParGridFunction eta(&fespace_fs);
     ParGridFunction phi_fs(&fespace_fs);
-
 
     eta.ProjectCoefficient(eta_init);
     phi_fs.ProjectCoefficient(phi_fs_init);
@@ -413,21 +354,60 @@ int main(int argc, char *argv[])
 
     mesh_fs.Transfer(phi_fs, phi);
 
+    // ================= ESSENTIAL BCs (top/free-surface boundary on volume mesh) =================
     Array<int> essential_bdr(mesh.bdr_attributes.Max());
     essential_bdr = 0;
-    essential_bdr[2 - 1] = 1;
+    essential_bdr[5 - 1] = 1;
+    essential_bdr[6 - 1] = 1;
+    essential_bdr[7 - 1] = 1;
+    essential_bdr[8 - 1] = 1;
 
     Array<int> ess_tdof;
     fespace.GetEssentialTrueDofs(essential_bdr, ess_tdof);
 
+    // ==================== RELAXATION FUNCTIONS Cgen and Cabs (ON fespace_fs) ====================
+    ParGridFunction Cgen_gf(&fespace_fs);
+    ParGridFunction Cabs_gf(&fespace_fs);
+    Cgen_gf = 0.0;
+    Cabs_gf = 0.0;
 
-    // ==================== RELAXATION FUNCTIONS Cgen and Cabs ====================
-    //submeshes on domain 101 and 102, transfer 
-    Array<int> dom_attr_g;
-    dom_attr_g.Append(101);
-    ParSubMesh GenZone = ParSubMesh::CreateFromDomain(mesh, dom_attr_g);
-    const double Ng  = 3;     // between 2 and 3
-    const double xg0 = bbmin(0);    //start of legs
+    // On mesh_fs, the patch IDs are element attributes.
+    int max_attr_fs = 0;
+    if (mesh_fs.attributes.Size()) { max_attr_fs = mesh_fs.attributes.Max(); }
+    max_attr_fs = std::max(max_attr_fs, 8);
+
+    Vector mask_gen_vals(max_attr_fs);
+    Vector mask_abs_vals(max_attr_fs);
+
+    // --- attribute ids on mesh_fs might be preserved (5,6,7,8) OR renumbered (1,2,3,4) ---
+    int gen_attr = 7;
+    int abs_attr = 8;
+
+    // If MFEM renumbered attributes on the submesh, they will typically become 1..bdr_attr.Size()
+    // in the same order as bdr_attr = {5,6,7,8} -> {1,2,3,4}
+    if (mesh_fs.attributes.Find(7) < 0 && mesh_fs.attributes.Find(3) >= 0) { gen_attr = 3; }
+    if (mesh_fs.attributes.Find(8) < 0 && mesh_fs.attributes.Find(4) >= 0) { abs_attr = 4; }
+
+    // (optional) print once
+    if (myid == 0)
+    {
+        cout << "mesh_fs attributes: ";
+        mesh_fs.attributes.Print(cout);
+        cout << "Using gen_attr=" << gen_attr << ", abs_attr=" << abs_attr << endl;
+    }
+
+    mask_gen_vals = 0.0;
+    mask_abs_vals = 0.0;
+
+    mask_gen_vals[gen_attr - 1] = 1.0;
+    mask_abs_vals[abs_attr - 1] = 1.0;
+
+    PWConstCoefficient mask_gen(mask_gen_vals);
+    PWConstCoefficient mask_abs(mask_abs_vals);
+
+    // ---- your original generation ramp (kept) ----
+    const double Ng  = 3;
+    const double xg0 = bbmin(0);
     const double xg1 = xg0 + Ng * lambda;
 
     FunctionCoefficient Cgen_coef([&](const Vector &X)
@@ -439,23 +419,22 @@ int main(int argc, char *argv[])
         return 1 - (-2.0 * xi*xi*xi + 3.0 * xi*xi);
     });
 
-    ParFiniteElementSpace fes_gen(&GenZone, fec);
-    ParGridFunction Cgen_gf(&fes_gen);
-    Cgen_gf.ProjectCoefficient(Cgen_coef);
-    GenZone.Transfer(Cgen_gf, phi);
-
-
-    Array<int> dom_attr_a;
-    dom_attr_a.Append(102);
-    ParSubMesh AbsZone = ParSubMesh::CreateFromDomain(mesh, dom_attr_a);
-    const double Ns = 3.0; 
-    const double x1 = 3;    //length of legs
+    // ---- FIX 2: absorption on the ENTIRE outlet leg (not only the tiny absorption patch) ----
+    // outlet leg is the y>0 straight section in this U-bend parameterization.
+    const double Ns = 3.0;
+    const double x1 = bbmax(0);
     const double x0 = x1 - Ns * lambda;
-    const double p = 5.0;
+    const double p  = 5.0;
 
     FunctionCoefficient Cabs_coef([&](const Vector &X)
     {
         const double x = X(0);
+        const double y = X(1);
+
+        // Only apply absorption on outlet leg
+        if (y <= 0.0) return 0.0;
+
+        // Ramp from 0 -> 1 over the last Ns*lambda of the outlet leg
         if (x <= x0) return 0.0;
         if (x >= x1) return 1.0;
 
@@ -463,23 +442,13 @@ int main(int argc, char *argv[])
         return pow(xi, p);
     });
 
-    ParFiniteElementSpace fes_abs(&AbsZone, fec);
-    ParGridFunction Cabs_gf(&fes_abs);
+    ProductCoefficient Cgen_masked(mask_gen, Cgen_coef);
+
+    Cgen_gf.ProjectCoefficient(Cgen_masked);
     Cabs_gf.ProjectCoefficient(Cabs_coef);
-    AbsZone.Transfer(Cabs_gf, phi);
 
-
-
-     // ========  START PLOTTING ==========
-    // ==================== ParaView output (volume + surface + relaxation functions) ====================
-    // ParaViewDataCollection pv_vol("PF_linear_finite_par_new_vol_cylinder", &mesh);
-    // pv_vol.SetPrefixPath("ParaView");
-    // pv_vol.SetLevelsOfDetail(5*order);
-    // pv_vol.SetDataFormat(VTKFormat::BINARY);
-    // pv_vol.SetHighOrderOutput(true);
-    // pv_vol.RegisterField("phi", &phi);
-
-    ParaViewDataCollection pv_fs("PF_linear_finite_par_cylinder-half", &mesh_fs);
+    // ==================== ParaView output (free-surface + relaxation functions) ====================
+    ParaViewDataCollection pv_fs("u-shape-half", &mesh_fs);
     pv_fs.SetPrefixPath("ParaView");
     pv_fs.SetLevelsOfDetail(5*order);
     pv_fs.SetDataFormat(VTKFormat::BINARY);
@@ -489,7 +458,7 @@ int main(int argc, char *argv[])
     pv_fs.RegisterField("Cabs", &Cabs_gf);
 
     // ============== TIME INTEGRATION =============
-    double tau = dt; // for relaxation
+    double tau = dt;
 
     ODESolver *ode_solver = new RK4Solver();
     rhs_linear surface(&fespace_fs, &fespace,
@@ -510,12 +479,10 @@ int main(int argc, char *argv[])
         cout << "Starting time integration with " << nsteps << " steps" << endl;
     }
 
-
     for (int step = 0; step < nsteps + 1; step++)
     {
         ode_solver->Step(eta_phi_fs, t, dt);
 
-        // update eta for output
         eta.SetFromTrueDofs(eta_phi_fs.GetBlock(0));
 
         if (myid == 0 && step % 10 == 0)
@@ -523,17 +490,9 @@ int main(int argc, char *argv[])
             cout << "Step " << step << " / " << nsteps << ", t = " << t << endl;
         }
 
-        // Save ParaView files
-        if (step % 1 == 0)
-        {
-            // pv_vol.SetCycle(step);
-            // pv_vol.SetTime(t);
-            // pv_vol.Save();
-
-            pv_fs.SetCycle(step);
-            pv_fs.SetTime(t);
-            pv_fs.Save();
-        }
+        pv_fs.SetCycle(step);
+        pv_fs.SetTime(t);
+        pv_fs.Save();
     }
 
     delete fec;
